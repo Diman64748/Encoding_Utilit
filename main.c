@@ -9,6 +9,7 @@ typedef unsigned char CodePage;
 typedef unsigned char Debug;
 typedef unsigned char Mode;
 
+
 void InitializeDefaultOptions(Options* options){
     options->debug = 0;
     options->input_f = stdin;
@@ -125,6 +126,7 @@ void ParseArguments(int argc, char *argv[] , Options *options){
 }
 
 int main(int argc, char* argv[]){
+    size_t r12;
     Options options;
     InitializeDefaultOptions(&options);
 
