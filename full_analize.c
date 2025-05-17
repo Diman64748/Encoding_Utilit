@@ -38,7 +38,9 @@ void PrintDetectedCodePage(CodePage coding){
     case KOI:
         puts("koi8r");
         break;
-
+    case NOT_RU:
+        puts("Используется не русская кодировка");
+        break;
     default:
     puts("ЧТО?");
         break;
@@ -47,10 +49,12 @@ void PrintDetectedCodePage(CodePage coding){
 
 CodePage TryToGetUTFCoding( unsigned ByteCountTable[] , unsigned long TotalBytesCount){
     CodePage coding = NOCODING;
-    unsigned most[MOST_PREFERRED_ARRAY_SZ_FOR_MOST_FREQUENCE];
+    unsigned most[MOST_PREFERRED_ARRAY_SZ_FOR_MOST_FREQUENCE] = {0};
+    unsigned most_utf8[MOST_PREFERRED_ARRAY_SZ_FOR_MOST_FREQUENCE] = {0};
     GetMostFrequence(ByteCountTable , most , MOST_PREFERRED_ARRAY_SZ_FOR_MOST_FREQUENCE , 0x00 , 0xff);
+    GetMostFrequence(ByteCountTable , most_utf8 , MOST_PREFERRED_ARRAY_SZ_FOR_MOST_FREQUENCE , 0x80 , 0xff);
     // fe and ff - two last bytes in array in UTF32 == 1 both
-    if(UTF_16_INTERVAL(most[0]) && UTF_16_INTERVAL(most[1]) && ByteCountTable[0xfe] == 1 && ByteCountTable[0xff] == 1){
+    if(UTF_16_INTERVAL(most[0]) && UTF_16_INTERVAL(most[1]) && (ByteCountTable[0x00] >= TotalBytesCount/2)){
         coding = UTF32;
     }
     else if(UTF_16_INTERVAL(most[0]) && UTF_16_INTERVAL(most[1])){
@@ -59,7 +63,7 @@ CodePage TryToGetUTFCoding( unsigned ByteCountTable[] , unsigned long TotalBytes
     else if(TotalBytesCount <= STABLE_DETECTION_LEVEL && (UTF_8_INTERVAl(most[0]) || UTF_8_INTERVAl(most[1])) ){
         coding = UTF8;
     }
-    else if(UTF_8_INTERVAl(most[0]) && UTF_8_INTERVAl(most[1])){
+    else if(UTF_8_INTERVAl(most_utf8[0]) && UTF_8_INTERVAl(most_utf8[1])){
         coding = UTF8;
     }
     return coding;
@@ -84,7 +88,7 @@ CodePage GetMiniCoding(unsigned long *sums){
 
 }
 
-void GetCoincidences(unsigned ByteCountTable[] , unsigned result[]){
+void GetCoincidences(unsigned ByteCountTable[] , unsigned result[] , unsigned wrong[]){
     unsigned most[MOST_PREFERRED_ARRAY_SZ_FOR_MOST_FREQUENCE];
     //unsigned least[3];
     GetMostFrequence(ByteCountTable , most ,MOST_PREFERRED_ARRAY_SZ_FOR_MOST_FREQUENCE , 0x80 , 0xff);
@@ -110,7 +114,29 @@ void GetCoincidences(unsigned ByteCountTable[] , unsigned result[]){
         if (DOS_MOST_FREQUENCY_VALUE(most[i]))
         {
             result[DOS]++;
+        }
+        if (MAC_WRONG_FREQUENCY(most[i]))
+        {
+            wrong[MACCIR]++;
         }   
+        if (WINDOWS_WRONG_FREQUENCY(most[i]))
+        {
+            wrong[WIN1251]++;
+        }
+        if (ISO_WRONG_FREQUENCY(most[i]))
+        {
+            wrong[ISO]++;
+        }
+        if (KOI8R_WRONG_FREQUENCY(most[i]))
+        {
+            wrong[KOI]++;
+        }
+        if (DOS_WRONG_FREQUENCY(most[i]))
+        {
+            wrong[DOS]++;
+        }
+        
+        
     }
 }
 
@@ -119,17 +145,71 @@ CodePage GetCodingByCoincidences(unsigned ByteCountTable[]){
     CodePage coding = NOCODING;
     
     unsigned Coincidences[NUMBER_OF_ONE_BYTE_RU_CODE_PAGES] = {0};
-    GetCoincidences(ByteCountTable , Coincidences);
+    unsigned Wrong_Symbols[NUMBER_OF_ONE_BYTE_RU_CODE_PAGES] = {0};
+
+    GetCoincidences(ByteCountTable , Coincidences , Wrong_Symbols);
     unsigned max = GetMaxFromArr(Coincidences , 5);
     if (max == Coincidences[MACCIR] && max == Coincidences[WIN1251])
     {
-        if (ByteCountTable[0xdf] > ByteCountTable[0xff]) return MACCIR;
-        else return WIN1251;
+        if (ByteCountTable[0xdf] > ByteCountTable[0xff]) coding = MACCIR;
+        else coding = WIN1251;
     }
-    else if(max == Coincidences[ISO]) return ISO;
-    else if(max == Coincidences[KOI]) return KOI;
-    else if(max == Coincidences[DOS]) return DOS;
+    else if(max == Coincidences[ISO]) coding = ISO;
+    else if(max == Coincidences[KOI]) coding = KOI;
+    else if(max == Coincidences[DOS]) coding = DOS;
+
+    switch (coding)
+    {
+    case MACCIR:
+        if(max > Wrong_Symbols[MACCIR]){
+            coding = MACCIR;
+            //printf("%d\n",Wrong_Symbols[MACCIR]);
+            //printf("%d\n",max);
+        }
+        else{
+            coding = NOT_RU;
+            //printf("%d\n",Wrong_Symbols[MACCIR]);
+            //printf("%d\n",max);
+        }
+        break;
+    case WIN1251:
+        if(max > Wrong_Symbols[WIN1251]){
+            coding = WIN1251;
+        }
+        else{
+            coding = NOT_RU;
+        }
+        break;
+    case ISO:
+        if(max > Wrong_Symbols[ISO]){
+            coding = ISO;
+        }
+        else{
+            coding = NOT_RU;
+        }
+        break;
+    case KOI:
+        if(max > Wrong_Symbols[KOI]){
+            coding = KOI;
+        }
+        else{
+            coding = NOT_RU;
+        }
+        break;
+    case DOS:
+        if(max > Wrong_Symbols[DOS]){
+            coding = DOS;
+        }
+        else{
+            coding = NOT_RU;
+        }
+        break;
     
+    default:
+        coding = NOCODING;
+        break;
+    }
+
     return coding;
 }
 
